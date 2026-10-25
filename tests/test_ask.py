@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from google.genai import types as genai_types
 
 from app import ask as ask_module
 
@@ -28,7 +29,7 @@ def test_ask_passes_model_and_temperature_and_prints_metrics(monkeypatch, capsys
     assert request == {
         "model": "test-model",
         "contents": "質問",
-        "config": {"temperature": 0.5},
+        "config": genai_types.GenerateContentConfig(temperature=0.5),
     }
     output = capsys.readouterr().out
     assert "[応答時間]" in output
@@ -53,7 +54,10 @@ def test_session_manager_keeps_history_until_session_ends(monkeypatch, capsys):
 
     class Chats:
         def create(self, **kwargs):
-            assert kwargs == {"model": "test-model", "config": {"temperature": 0.2}}
+            assert kwargs == {
+                "model": "test-model",
+                "config": genai_types.GenerateContentConfig(temperature=0.2),
+            }
             return Conversation()
 
     class Client:

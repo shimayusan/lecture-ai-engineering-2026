@@ -19,6 +19,7 @@ from uuid import uuid4
 from google import genai
 from google.genai import chats
 from google.genai import errors
+from google.genai import types
 
 from app.config import MODEL, api_error_message, get_api_key
 
@@ -36,13 +37,19 @@ def _print_response_metrics(
     else:
         print(
             f"[トークン数] 入力: {usage.prompt_token_count}, "
-            f"出力: {usage.candidates_token_count}"
+            + f"出力: {usage.candidates_token_count}"
         )
+
+
+def _generation_config(temperature: float | None) -> types.GenerateContentConfig | None:
+    if temperature is None:
+        return None
+    return types.GenerateContentConfig(temperature=temperature)
 
 
 def ask(question: str, model: str = MODEL, temperature: float | None = None) -> str:
     client = genai.Client(api_key=get_api_key())
-    config = {"temperature": temperature} if temperature is not None else None
+    config = _generation_config(temperature)
     started_at = perf_counter()
     response = client.models.generate_content(
         model=model,
@@ -51,16 +58,18 @@ def ask(question: str, model: str = MODEL, temperature: float | None = None) -> 
     )
     _print_response_metrics(response, perf_counter() - started_at)
 
-    return response.text
+    return response.text or ""
 
 
 class SessionManager:
     """プロセス内だけで有効な会話セッションを管理する。"""
 
     def __init__(self, model: str = MODEL, temperature: float | None = None) -> None:
-        self._client = genai.Client(api_key=get_api_key())
-        self._model = model
-        self._config = {"temperature": temperature} if temperature is not None else None
+        self._client: genai.Client = genai.Client(api_key=get_api_key())
+        self._model: str = model
+        self._config: types.GenerateContentConfig | None = _generation_config(
+            temperature
+        )
         self._conversation: chats.Chat | None = None
         self.session_id: str | None = None
 
@@ -91,7 +100,7 @@ def run_session(model: str = MODEL, temperature: float | None = None) -> None:
     session_id = session.start_session()
     print(
         f"セッション {session_id} を開始しました。"
-        "終了するには exit または quit と入力してください。"
+        + "終了するには exit または quit と入力してください。"
     )
     try:
         while True:
@@ -106,19 +115,26 @@ def run_session(model: str = MODEL, temperature: float | None = None) -> None:
         print(f"セッション {session_id} を終了しました（履歴は破棄されます）。")
 
 
+class Args(argparse.Namespace):
+    question: str = DEFAULT_QUESTION
+    model: str = MODEL
+    temperature: float | None = None
+    session: bool = False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="素のLLMに質問する")
-    parser.add_argument("question", nargs="?", default=DEFAULT_QUESTION)
-    parser.add_argument(
+    _ = parser.add_argument("question", nargs="?", default=DEFAULT_QUESTION)
+    _ = parser.add_argument(
         "--model", default=MODEL, help="使用するモデル（既定: AIE_MODEL または講座の既定値）"
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--temperature", type=float, help="生成時の temperature（0〜2）"
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--session", action="store_true", help="会話履歴を保つ一時セッションを開始"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(namespace=Args())
     if args.temperature is not None and not 0 <= args.temperature <= 2:
         parser.error("--temperature は 0 から 2 の範囲で指定してください")
 
@@ -130,7 +146,7 @@ def main() -> None:
             print(f"[質問] {args.question}\n")
             print(ask(args.question, model=args.model, temperature=args.temperature))
     except errors.APIError as e:
-        print(api_error_message(e.code, e.message))
+        print(api_error_message(e.code, e.message or ""))
         raise SystemExit(1)
 
 

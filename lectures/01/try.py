@@ -57,16 +57,21 @@ def run_advanced_experiment(models: list[str]) -> None:
         print(ask(question, model=model, temperature=0.2))
 
 
+class Args(argparse.Namespace):
+    model: str = MODEL
+    compare_models: list[str] | None = None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="第1回の宿題の実験を実行する")
-    parser.add_argument("--model", default=MODEL, help="使用するモデル")
-    parser.add_argument(
+    _ = parser.add_argument("--model", default=MODEL, help="使用するモデル")
+    _ = parser.add_argument(
         "--compare-model",
         action="append",
         dest="compare_models",
         help="レベル3で比較するモデル（複数指定可）",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(namespace=Args())
 
     print(f"[model] {args.model}")
     try:
@@ -75,7 +80,7 @@ def main() -> None:
         models = args.compare_models or [args.model, "gemini-3.5-flash"]
         run_advanced_experiment(models)
     except errors.APIError as error:
-        print(api_error_message(error.code, error.message))
+        print(api_error_message(error.code, error.message or ""))
         raise SystemExit(1) from error
 
 
