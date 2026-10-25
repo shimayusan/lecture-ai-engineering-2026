@@ -9,11 +9,19 @@
 """
 
 import argparse
+from time import sleep
 
 from google.genai import errors
 
 from app.ask import SessionManager, ask
 from app.config import MODEL, api_error_message
+
+# 続けて送りすぎないよう、API呼び出しの前に待つ秒数
+REQUEST_INTERVAL_SECONDS = 5
+
+
+def wait_before_request() -> None:
+    sleep(REQUEST_INTERVAL_SECONDS)
 
 
 def run_basic_experiment(model: str) -> None:
@@ -41,15 +49,12 @@ def run_session_experiment(model: str) -> None:
 
 def run_advanced_experiment(models: list[str]) -> None:
     print("\n=== 発展: モデルごとの応答時間・トークン数 ===")
-    for question in (
-        "LoRAを一文で説明してください。",
-        "RAGを一文で説明してください。",
-        "AIE2026の講座の宿題にある「3レベル」とは何ですか？",
-    ):
-        print(f"\n[質問] {question}")
-        for model in models:
-            print(f"\n[model] {model}")
-            print(ask(question, model=model, temperature=0.2))
+    question = "RAGを一文で説明してください。"
+    print(f"\n[質問] {question}")
+    for model in models:
+        print(f"\n[model] {model}")
+        wait_before_request()
+        print(ask(question, model=model, temperature=0.2))
 
 
 def main() -> None:
@@ -67,7 +72,7 @@ def main() -> None:
     try:
         run_basic_experiment(args.model)
         run_session_experiment(args.model)
-        models = args.compare_models or [args.model, "gemini-3.8-flash"]
+        models = args.compare_models or [args.model, "gemini-3.5-flash"]
         run_advanced_experiment(models)
     except errors.APIError as error:
         print(api_error_message(error.code, error.message))
